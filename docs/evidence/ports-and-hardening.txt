@@ -1,0 +1,8 @@
+Runtime hardening verification
+Gallery: 127.0.0.1:8080 -> Nginx HTTP redirect -> 127.0.0.1:8443 HTTPS -> app:3000
+phpMyAdmin: 127.0.0.1:8081; Prometheus: 127.0.0.1:9090; Grafana: 127.0.0.1:3001
+MySQL has no host published port and is on internal database network.
+App response headers: X-Content-Type-Options nosniff; X-Frame-Options DENY; Referrer-Policy strict-origin-when-cross-origin; CSP present.
+TLS verification: curl -k https://127.0.0.1:8443/health -> HTTP 200; HTTP :8080/health -> 308 redirect to HTTPS.
+App container: USER node, read_only, cap_drop ALL, no-new-privileges, tmpfs /tmp.
+Exporter exception: cAdvisor is privileged and reads host metrics paths; Promtail reads Docker socket/log paths.

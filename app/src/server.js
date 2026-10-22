@@ -17,8 +17,56 @@ import express from 'express';
 
 
 
+
+const metricCounters = new Map();
+const metricHistograms = new Map();
+function metricKey(name, labels) { return `${name}|${Object.entries(labels).sort().map(([key, value]) => `${key}=${value}`).join(',')}`; }
+function incrementMetric(name, labels = {}, value = 1) {
+  const key = metricKey(name, labels);
+  metricCounters.set(key, (metricCounters.get(key) || { name, labels, value: 0 }));
+  metricCounters.get(key).value += value;
+}
+function observeMetric(name, labels, value) {
+  const key = metricKey(name, labels);
+  const item = metricHistograms.get(key) || { name, labels, count: 0, sum: 0, buckets: [0, 0, 0, 0, 0, 0] };
+  const limits = [0.005, 0.01, 0.05, 0.1, 0.5, 1];
+  item.count += 1; item.sum += value;
+  limits.forEach((limit, index) => { if (value <= limit) item.buckets[index] += 1; });
+  metricHistograms.set(key, item);
+}
+function prometheusLabels(labels) {
+  const entries = Object.entries(labels).map(([key, value]) => `${key}="${String(value).replaceAll('\\', '\\\\').replaceAll('"', '\\"') }"`);
+  return entries.length ? `{${entries.join(',')}}` : '';
+}
+function metricsText() {
+  const lines = ['# HELP gallery_http_requests_total Total HTTP requests handled by Gallery.', '# TYPE gallery_http_requests_total counter'];
+  for (const item of metricCounters.values()) {
+    lines.push(`${item.name}${prometheusLabels(item.labels)} ${item.value}`);
+  }
+  for (const item of metricHistograms.values()) {
+    const limits = [0.005, 0.01, 0.05, 0.1, 0.5, 1];
+    lines.push(`# TYPE ${item.name} histogram`);
+    limits.forEach((limit, index) => lines.push(`${item.name}_bucket${prometheusLabels({ ...item.labels, le: limit })} ${item.buckets[index]}`));
+    lines.push(`${item.name}_bucket${prometheusLabels({ ...item.labels, le: '+Inf' })} ${item.count}`);
+    lines.push(`${item.name}_sum${prometheusLabels(item.labels)} ${item.sum}`);
+    lines.push(`${item.name}_count${prometheusLabels(item.labels)} ${item.count}`);
+  }
+  return `${lines.join('\n')}\n`;
+}
+
 const app = express();
 const port = Number(process.env.PORT || 3000);
+
+function logEvent(event, fields = {}) {
+  console.log(JSON.stringify({ timestamp: new Date().toISOString(), service: 'gallery-app', event, ...fields }));
+}
+
+function requestUserId(req) {
+  return req.session?.user?.id ?? null;
+}
+
+
+
 const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 function slugify(value) {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -118,9 +166,29 @@ app.use(express.json({ limit: '100kb' }));
 app.use(express.urlencoded({ extended: false, limit: '100kb' }));
 app.use(express.static(publicDir, { index: false }));
 
+app.get('/metrics', (_req, res) => {
+  res.type('text/plain; version=0.0.4').send(metricsText());
+});
+
+app.use((req, res, next) => {
+  const started = process.hrtime.bigint();
+  res.on('finish', () => {
+    const route = req.route?.path || req.path || 'unknown';
+    logEvent('http_request', { method: req.method, route, status: res.statusCode, duration_ms: Math.round(Number(process.hrtime.bigint() - started) / 1e6), user_id: requestUserId(req) });
+
+    const labels = { method: req.method, route, status: res.statusCode };
+    incrementMetric('gallery_http_requests_total', labels);
+    if (res.statusCode >= 400) incrementMetric('gallery_http_errors_total', { method: req.method, route, status: res.statusCode });
+    observeMetric('gallery_http_request_duration_seconds', { method: req.method, route }, Number(process.hrtime.bigint() - started) / 1e9);
+  });
+  next();
+});
 app.get('/health', (_req, res) => {
   res.status(200).json({ status: 'ok', service: 'gallery-app' });
 });
+
+
+
 
 app.get('/health/db', async (_req, res) => {
   try {
@@ -187,6 +255,7 @@ app.post('/api/auth/register', async (req, res) => {
     const user = publicUser(userRecord);
     const session = await createSession(user);
     setSessionCookie(res, session.sid, session.expires);
+    logEvent('user_registered', { user_id: user.id, role: user.role });
     res.status(201).json({ data: user });
   } catch (error) { databaseError(res, error); }
 });
@@ -200,7 +269,9 @@ app.post('/api/auth/login', async (req, res) => {
     const safeUser = publicUser(user);
     const session = await createSession(safeUser);
     setSessionCookie(res, session.sid, session.expires);
+    logEvent('login_succeeded', { user_id: safeUser.id, role: safeUser.role });
     res.json({ data: safeUser });
+
   } catch (error) { databaseError(res, error); }
 });
 
@@ -460,10 +531,14 @@ app.post('/api/images', requireAuth, (req, res, next) => {
       await Promise.all(saved.map(image => fs.unlink(path.join(uploadDir, image.stored_name)).catch(() => {})));
       throw error;
     }
+    incrementMetric('gallery_uploads_total', { status: 'success' }, saved.length);
+
+    incrementMetric('gallery_upload_bytes_total', { status: 'success' }, uploadBytes);
+    logEvent('image_upload_completed', { user_id: req.session.user.id, album_id: albumId, file_count: saved.length, bytes: uploadBytes });
+('image_upload_completed', { user_id: req.session.user.id, album_id: albumId, file_count: saved.length, bytes: uploadBytes });
     res.status(201).json({ data: saved });
   } catch (error) { databaseError(res, error); }
 });
-
 
 async function albumOwner(req, res, next) {
   try {
@@ -581,8 +656,11 @@ app.delete('/api/images/:id/shares/:userId', requireAuth, imageOwner, async (req
 
 app.post('/api/images/:id/share-links', requireAuth, imageEditor, async (req, res) => {
   try {
+    incrementMetric('gallery_share_links_created_total', { status: 'success' });
+
     const shareToken = crypto.randomBytes(24).toString('base64url');
     const result = await query('INSERT INTO image_shares (image_id, share_token) VALUES (?, ?)', [req.image.id, shareToken]);
+    logEvent('share_link_created', { user_id: req.session.user.id, image_id: req.image.id, share_id: result.insertId });
     res.status(201).json({ data: { id: result.insertId, image_id: req.image.id, share_token: shareToken, url: `/share/${shareToken}` } });
   } catch (error) { databaseError(res, error); }
 });

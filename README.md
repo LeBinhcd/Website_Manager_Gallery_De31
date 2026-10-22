@@ -1,53 +1,59 @@
-# Gallery — Đề tài 31
+# Đề 31: Hệ thống thư viện ảnh
 
-Website quản lý album ảnh, upload, phân loại và chia sẻ ảnh. Stack triển khai hiện tại gồm Node.js/Express, MySQL, phpMyAdmin và Nginx reverse proxy với HTTPS self-signed cùng security headers cơ bản.
+**Sinh viên:** Lê Quốc Bình - DTC245220030 - ATTTK23<br>
+**Giảng viên:** Nguyễn Anh Chuyên
 
-## Thành phần
+## Giới thiệu
 
-- `app/`: frontend và backend Node.js/Express
-- `db/init/`: schema và dữ liệu khởi tạo MySQL
-- `nginx/`: reverse proxy, HTTPS self-signed và security headers
-- `compose.yaml`: Docker Compose cho app, MySQL, phpMyAdmin và Nginx
+Hệ thống thư viện ảnh cho phép đăng ký, đăng nhập, tạo album, tải và phân loại ảnh, chia sẻ album/ảnh và quản lý quyền truy cập. Dự án sử dụng Node.js/Express, MySQL, Nginx reverse proxy HTTPS, Prometheus/Grafana và Loki/Promtail; toàn bộ dịch vụ chạy bằng Docker Compose.
 
-## Khởi chạy
+## Chuẩn bị và chạy dự án
 
-Yêu cầu Docker Engine và Docker Compose plugin.
+Cài Docker Engine và Docker Compose. Từ thư mục gốc dự án chạy:
 
 ```sh
 cp .env.example .env
-# Đổi các mật khẩu trong .env bằng chuỗi ngẫu nhiên mạnh
 ./nginx/generate-dev-cert.sh
-docker compose config
 docker compose up -d --build
 docker compose ps
 ```
 
-Truy cập:
+Mở Gallery tại `https://localhost:8443`. Các địa chỉ khác: phpMyAdmin `http://localhost:8081`, Prometheus `http://localhost:9090`, Grafana `http://localhost:3001`; mật khẩu Grafana lấy từ `GRAFANA_PASSWORD` trong `.env`.
 
-- Gallery HTTPS: https://localhost:8443
-- Gallery HTTP: http://localhost:8080 (tự chuyển hướng sang HTTPS)
-- phpMyAdmin: http://localhost:8081
-
-Certificate là self-signed dùng cho môi trường demo, trình duyệt sẽ hiển thị cảnh báo. MySQL không publish cổng ra host; phpMyAdmin và các cổng web chỉ bind trên localhost theo cấu hình Compose.
-
-Tài khoản quản trị ứng dụng demo: `admin` / `admin`. Hãy đổi thông tin này trước khi sử dụng thực tế.
-
-## Kiểm thử
+Dừng hệ thống:
 
 ```sh
-cd app
-npm ci
-npm test
-npm run check
+docker compose down
 ```
+
+Không commit `.env` và không dùng `docker compose down -v` nếu muốn giữ dữ liệu.
+
+## Loki + Promtail
+
+Promtail đọc Docker container logs và gửi về Loki. Trong Grafana → **Explore**, chọn datasource **Loki** và chạy các truy vấn LogQL:
+
+```logql
+{service="app"}
+```
+
+```logql
+{service="app"} | json | event="http_request"
+```
+
+```logql
+{service="app"} |~ "upload|share|login|register"
+```
+
+Dashboard **Gallery Logs** được provision tự động. Cấu hình nằm trong `logging/`, datasource và dashboard Grafana nằm trong `monitoring/provisioning/`, bằng chứng nằm trong `docs/evidence/`.
+
+## Kiểm tra
+
+```sh
+cd app && npm ci && npm test && npm run check
+```
+
+Có thể kiểm tra thêm `/health`, `/health/db`, Prometheus Targets và Grafana Explore.
 
 ## Hardening
 
-- App chạy bằng user non-root.
-- App và Nginx dùng filesystem read-only khi phù hợp.
-- Container app và Nginx drop capabilities.
-- Bật `no-new-privileges`.
-- Database network là internal và MySQL không expose trực tiếp.
-- Mật khẩu chỉ đặt trong `.env`, không commit lên Git.
-- Nginx bật TLS 1.2/1.3, redirect HTTP sang HTTPS và các security headers: CSP, X-Content-Type-Options, X-Frame-Options, Referrer-Policy.
-- Private key/certificate phát sinh không được theo dõi bởi Git.
+App chạy non-root, filesystem read-only, drop capabilities và `no-new-privileges`. MySQL nằm trong network nội bộ, không publish port ra host; user ứng dụng chỉ có quyền CRUD trên database `gallery`. Nginx dùng HTTPS và security headers.

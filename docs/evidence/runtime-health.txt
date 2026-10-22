@@ -1,0 +1,7 @@
+Gallery De31 - runtime verification (2026-10-22)
+GET /health -> 200 {"status":"ok","service":"gallery-app"}
+GET /health/db -> 200 {"configured":true,"connected":true}
+Prometheus query mysql_up -> 1
+Prometheus query up -> jobs mysql, nginx, prometheus, gallery-app, containers all 1
+Workflow: register demo_gallery -> 201; create album -> 201; overview -> albumCount=1,imageCount=0,sharedImageCount=0
+Backup restore test -> isolated gallery_restore_test, albums=5, users=4, dropped after verification

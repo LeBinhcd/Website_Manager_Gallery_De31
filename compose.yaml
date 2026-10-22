@@ -92,6 +92,29 @@ services:
     networks: [web, database, observability]
     depends_on: [app, nginx, mysqld-exporter, nginx-exporter, cadvisor]
     security_opt: ["no-new-privileges:true"]
+  loki:
+    image: grafana/loki:3.5.3
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    volumes: ["./logging/loki.yml:/etc/loki/local-config.yaml:ro", "loki_data:/loki"]
+    networks: [observability]
+    depends_on: [prometheus]
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3100/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+  promtail:
+    image: grafana/promtail:3.5.3
+    restart: unless-stopped
+    command: ["-config.file=/etc/promtail/config.yml"]
+    volumes: ["./logging/promtail.yml:/etc/promtail/config.yml:ro", "/var/lib/docker/containers:/var/lib/docker/containers:ro", "/var/run/docker.sock:/var/run/docker.sock:ro", "promtail_positions:/tmp/positions"]
+    networks: [observability]
+    depends_on:
+      loki: {condition: service_healthy}
+    security_opt: ["no-new-privileges:true"]
+
   grafana:
     image: grafana/grafana:12.1.0
     restart: unless-stopped
@@ -141,3 +164,7 @@ volumes:
   nginx_logs: {}
   prometheus_data: {}
   grafana_data: {}
+
+
+  loki_data: {}
+  promtail_positions: {}

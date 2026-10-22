@@ -29,10 +29,6 @@ CREATE TABLE IF NOT EXISTS albums (
   slug VARCHAR(140) NOT NULL UNIQUE,
   description TEXT NOT NULL,
   visibility ENUM('public','private','link') NOT NULL DEFAULT 'public',
-  cover_theme VARCHAR(40) NOT NULL DEFAULT 'default',
-  cover_stored_name VARCHAR(255) NULL,
-  cover_original_name VARCHAR(255) NULL,
-  cover_file_size BIGINT UNSIGNED NOT NULL DEFAULT 0,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_albums_owner (owner_id)
 ) ENGINE=InnoDB;
@@ -104,14 +100,6 @@ SET @add_owner_index_sql = IF((SELECT COUNT(*) FROM information_schema.statistic
 PREPARE add_owner_index_stmt FROM @add_owner_index_sql;
 EXECUTE add_owner_index_stmt;
 DEALLOCATE PREPARE add_owner_index_stmt;
-SET @add_cover_theme_sql = IF((SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'albums' AND column_name = 'cover_theme') = 0, 'ALTER TABLE albums ADD COLUMN cover_theme VARCHAR(40) NOT NULL DEFAULT ''default''', 'SELECT 1');
-PREPARE add_cover_theme_stmt FROM @add_cover_theme_sql;
-EXECUTE add_cover_theme_stmt;
-DEALLOCATE PREPARE add_cover_theme_stmt;
-SET @add_cover_image_sql = IF((SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'albums' AND column_name = 'cover_stored_name') = 0, 'ALTER TABLE albums ADD COLUMN cover_stored_name VARCHAR(255) NULL, ADD COLUMN cover_original_name VARCHAR(255) NULL, ADD COLUMN cover_file_size BIGINT UNSIGNED NOT NULL DEFAULT 0', 'SELECT 1');
-PREPARE add_cover_image_stmt FROM @add_cover_image_sql;
-EXECUTE add_cover_image_stmt;
-DEALLOCATE PREPARE add_cover_image_stmt;
 INSERT INTO albums(name, slug, description) SELECT 'Ảnh công khai', 'anh-cong-khai', 'Album mặc định của hệ thống Gallery.' WHERE NOT EXISTS (SELECT 1 FROM albums);
 INSERT INTO categories(name, slug) VALUES
   ('Chưa phân loại', 'chua-phan-loai'),
@@ -125,3 +113,12 @@ INSERT INTO categories(name, slug) VALUES
   ('Khác', 'khac')
 ON DUPLICATE KEY UPDATE name = VALUES(name);
 SQL
+
+CREATE USER IF NOT EXISTS 'exporter'@'%' IDENTIFIED BY '$EXPORTER_DB_PASSWORD';
+
+ALTER USER 'exporter'@'%' IDENTIFIED BY '$EXPORTER_DB_PASSWORD';
+
+GRANT PROCESS, REPLICATION CLIENT, SELECT
+ON *.* TO 'exporter'@'%';
+
+FLUSH PRIVILEGES;

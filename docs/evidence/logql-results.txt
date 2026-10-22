@@ -1,0 +1,5 @@
+Live Loki LogQL verification (2026-10-22)
+{job="app"} -> status success, 1 stream, container gallery-de31-app-1
+{job="nginx"} -> status success, 1 stream, container gallery-de31-nginx-1
+{job="mysql"} -> status success, 1 stream, container gallery-de31-mysql-1
+Promtail Docker target discovery logged added Docker target for all project containers.
