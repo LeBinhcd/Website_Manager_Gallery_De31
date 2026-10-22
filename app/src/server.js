@@ -174,6 +174,8 @@ app.use((req, res, next) => {
   const started = process.hrtime.bigint();
   res.on('finish', () => {
     const route = req.route?.path || req.path || 'unknown';
+    if (req.path === '/api/images' && res.statusCode >= 400) logEvent('image_upload_failed', { user_id: requestUserId(req), status: res.statusCode, method: req.method });
+
     logEvent('http_request', { method: req.method, route, status: res.statusCode, duration_ms: Math.round(Number(process.hrtime.bigint() - started) / 1e6), user_id: requestUserId(req) });
 
     const labels = { method: req.method, route, status: res.statusCode };
@@ -305,6 +307,9 @@ app.post('/api/albums', requireAuth, (req, res, next) => {
     const invalidFile = validateImageFile(req.file);
     if (invalidFile) return badRequest(res, invalidFile);
   }
+    const [duplicate] = await query('SELECT id FROM albums WHERE owner_id = ? AND LOWER(TRIM(name)) = LOWER(TRIM(?)) LIMIT 1', [req.session.user.id, name]);
+    if (duplicate) return res.status(409).json({ error: 'album_name_exists', message: 'Bạn đã có album cùng tên.' });
+
   try {
     if (req.file) {
       const [storage] = await query('SELECT COALESCE((SELECT SUM(file_size) FROM images WHERE uploaded_by = ?), 0) + COALESCE((SELECT SUM(cover_file_size) FROM albums WHERE owner_id = ?), 0) AS total_bytes', [req.session.user.id, req.session.user.id]);
@@ -535,7 +540,7 @@ app.post('/api/images', requireAuth, (req, res, next) => {
 
     incrementMetric('gallery_upload_bytes_total', { status: 'success' }, uploadBytes);
     logEvent('image_upload_completed', { user_id: req.session.user.id, album_id: albumId, file_count: saved.length, bytes: uploadBytes });
-('image_upload_completed', { user_id: req.session.user.id, album_id: albumId, file_count: saved.length, bytes: uploadBytes });
+
     res.status(201).json({ data: saved });
   } catch (error) { databaseError(res, error); }
 });
@@ -770,7 +775,10 @@ app.get(['/', '/collections', '/shared', '/recent', '/admin'], async (req, res) 
     <main class="content" id="${collectionPage ? 'collections-page' : 'overview'}">
       <header class="topbar"><button class="mobile-menu" aria-label="Mở menu">☰</button><div class="breadcrumb">Không gian của bạn <span>/</span> ${adminPage ? 'Quản trị' : sharedPage ? 'Chia sẻ' : recentPage ? 'Gần đây' : collectionPage ? 'Bộ sưu tập' : 'Tổng quan'}</div><div class="top-actions"><button class="icon-button theme-toggle" aria-label="Đổi giao diện">☼</button><button class="notification" aria-label="Thông báo">♧<i></i></button><button class="secondary-button logout-button" id="logout-button" type="button"><span class="logout-icon">↪</span><span class="logout-label">Đăng xuất</span><span class="button-spinner" aria-hidden="true"></span></button><span class="top-avatar avatar user-avatar">LB</span></div></header>
       <section class="hero" data-overview-section><div><p class="eyebrow">THỨ BA, 20 THÁNG 10, 2026</p><h1>Xin chào, <span id="current-user-name">bạn</span> <span>✦</span></h1><p class="hero-copy">Lưu giữ những khoảnh khắc làm nên câu chuyện của bạn.</p></div><button class="primary-button" id="upload-button"><span>＋</span> Thêm ảnh mới</button></section>
-      <section class="stats" aria-label="Thống kê thư viện" data-overview-section><div class="stat-card"><span class="stat-icon purple">▧</span><div><strong>1,248</strong><small>Tổng số ảnh</small></div><em>+12% <small>tháng này</small></em></div><div class="stat-card"><span class="stat-icon orange">▦</span><div><strong>24</strong><small>Bộ sưu tập</small></div><em>+3 <small>mới tạo</small></em></div><div class="stat-card"><span class="stat-icon blue">↗</span><div><strong>86</strong><small>Ảnh đã chia sẻ</small></div><em>+8% <small>tương tác</small></em></div></section>
+
+
+
+       <section class="stats" aria-label="Thống kê thư viện" data-overview-section><div class="stat-card"><span class="stat-icon purple">▧</span><div><strong id="overview-image-count">0</strong><small>Tổng số ảnh</small></div><em>— <small>tháng này</small></em></div><div class="stat-card"><span class="stat-icon orange">▦</span><div><strong id="overview-album-count">0</strong><small>Bộ sưu tập</small></div><em>— <small>mới tạo</small></em></div><div class="stat-card"><span class="stat-icon blue">↗</span><div><strong id="overview-shared-count">0</strong><small>Ảnh đã chia sẻ</small></div><em>— <small>tương tác</small></em></div></section>
       <section class="section-heading" id="collections" data-overview-section><div><p class="eyebrow">KHÔNG GIAN CỦA BẠN</p><h2>Bộ sưu tập nổi bật</h2></div><a href="/collections">Xem tất cả <span>→</span></a></section>
       <section class="collection-grid" id="overview-albums" data-overview-section><p class="page-copy">Đang tải album…</p></section>
       <section class="recent-section" id="recent" data-overview-section><div class="section-heading"><div><p class="eyebrow">HOẠT ĐỘNG MỚI NHẤT</p><h2>Ảnh gần đây</h2></div><div class="view-controls"><button class="active" aria-label="Xem dạng lưới">▦</button><button aria-label="Xem dạng danh sách">☷</button></div></div><div class="recent-grid" id="recent-grid-overview"></div></section>

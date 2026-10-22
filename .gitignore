@@ -1,3 +1,6 @@
+db/backups/*
+!db/backups/.gitkeep
+
 .env
 .env.*
 !.env.example

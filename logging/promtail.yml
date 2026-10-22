@@ -15,11 +15,14 @@ scrape_configs:
             output: log
             stream: stream
             timestamp: time
+            event: event
       - output:
           source: output
       - timestamp:
           source: timestamp
           format: RFC3339Nano
+      - labels:
+          event:
     relabel_configs:
       - source_labels: ['__meta_docker_container_label_com_docker_compose_service']
         target_label: service

@@ -320,6 +320,11 @@ async function loadAdminData() {
 }
 
 const overviewAlbums = document.querySelector('#overview-albums');
+const overviewStats = {
+  images: document.querySelector('#overview-image-count'),
+  albums: document.querySelector('#overview-album-count'),
+  shared: document.querySelector('#overview-shared-count')
+};
 const collectionsGrid = document.querySelector('.collection-grid-full');
 const collectionsToolbar = document.querySelector('.collection-view-toolbar strong');
 const sharedGrid = document.querySelector('#shared-grid');
@@ -476,7 +481,12 @@ shareList?.addEventListener('click', async event => { const button = event.targe
 document.querySelector('#new-collection-button')?.addEventListener('click', () => { returnToUploadAfterAlbumCreation = false; newCollectionForm?.reset(); if (newCollectionMessage) newCollectionMessage.textContent = ''; if (newCollectionDialog) newCollectionDialog.hidden = false; document.querySelector('#new-collection-name')?.focus(); });
 ['#new-collection-cancel', '#new-collection-cancel-action'].forEach(selector => document.querySelector(selector)?.addEventListener('click', () => { if (newCollectionDialog) newCollectionDialog.hidden = true; }));
 newCollectionForm?.addEventListener('submit', async event => { event.preventDefault(); if (!newCollectionForm.checkValidity()) return newCollectionForm.reportValidity(); setButtonLoading(newCollectionSubmit, true, 'Đang tạo…'); newCollectionMessage.textContent = ''; try { const form = new FormData(newCollectionForm); const response = await fetch('/api/albums', {method:'POST', body:form}); const body = await response.json().catch(() => ({})); if (!response.ok) { newCollectionMessage.textContent = response.status === 400 ? (body.message || 'Tên album không hợp lệ.') : 'Không thể tạo album.'; return; } newCollectionDialog.hidden = true; await refreshAlbums(); if (returnToUploadAfterAlbumCreation && body.data?.id) { await loadUploadAlbums(); uploadAlbum.value = String(body.data.id); uploadDialog.hidden = false; returnToUploadAfterAlbumCreation = false; showToast('Đã tạo album. Bạn có thể tải ảnh lên.', 'success'); } else showToast('Đã tạo album.', 'success'); } catch { newCollectionMessage.textContent = 'Không thể kết nối đến máy chủ.'; } finally { setButtonLoading(newCollectionSubmit, false, 'Tạo album'); } });
-async function refreshOverview() { const response = await fetch('/api/overview'); if (!response.ok) return; const {data} = await response.json(); const stats = document.querySelectorAll('.stat-card strong'); if (stats[0]) stats[0].textContent = data.imageCount.toLocaleString('vi-VN'); if (stats[1]) stats[1].textContent = data.albumCount.toLocaleString('vi-VN'); if (stats[2]) stats[2].textContent = data.sharedImageCount.toLocaleString('vi-VN'); const percent = Math.min(100, data.storageBytes / data.storageQuotaBytes * 100); const displayedPercent = percent > 0 && percent < 0.01 ? '<0.01' : percent.toFixed(2).replace(/\.?0+$/, ''); if (storagePercent) storagePercent.textContent = `${displayedPercent}%`; if (storageProgress) storageProgress.style.width = `${percent}%`; if (storageSummary) storageSummary.textContent = `${formatBytes(data.storageBytes)} trong ${formatBytes(data.storageQuotaBytes)}`; }
+async function refreshOverview() { const response = await fetch('/api/overview'); if (!response.ok) return; const {data} = await response.json();
+  if (overviewStats.images) overviewStats.images.textContent = data.imageCount.toLocaleString('vi-VN');
+  if (overviewStats.albums) overviewStats.albums.textContent = data.albumCount.toLocaleString('vi-VN');
+  if (overviewStats.shared) overviewStats.shared.textContent = data.sharedImageCount.toLocaleString('vi-VN');
+  const percent = Math.min(100, data.storageBytes / data.storageQuotaBytes * 100); const displayedPercent = percent > 0 && percent < 0.01 ? '<0.01' : percent.toFixed(2).replace(/\.?0+$/, ''); if (storagePercent) storagePercent.textContent = `${displayedPercent}%`; if (storageProgress) storageProgress.style.width = `${percent}%`; if (storageSummary) storageSummary.textContent = `${formatBytes(data.storageBytes)} trong ${formatBytes(data.storageQuotaBytes)}`; }
+
 refreshAlbums();
 refreshOverview();
 refreshSharedImages();
