@@ -74,10 +74,8 @@ test('recent route and API are available', async () => {
   assert.match(body, /data-page="recent"/);
   assert.match(body, /Gần đây/);
   const api = await fetch(`${baseUrl}/api/recent`);
-  assert.ok([200, 503].includes(api.status));
-  const apiBody = await api.json();
-  if (api.status === 200) assert.ok(Array.isArray(apiBody.data));
-  else assert.equal(apiBody.error, 'database_not_configured');
+  assert.equal(api.status, 401);
+  assert.deepEqual(await api.json(), { error: 'authentication_required' });
 });
 
 

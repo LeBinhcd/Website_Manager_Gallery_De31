@@ -367,10 +367,9 @@ app.get('/api/albums/:id', requireAuth, albumAccess, async (req, res) => {
 
 app.use('/uploads', express.static(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'uploads'), { index: false }));
 
-app.get('/api/recent', async (req, res) => {
+app.get('/api/recent', requireAuth, async (req, res) => {
   try {
-    const session = await loadSession(req);
-    const images = await query("SELECT images.id, images.album_id, images.title, images.original_name, images.created_at, images.visibility, albums.name AS album_name FROM images JOIN albums ON albums.id = images.album_id WHERE (images.visibility = 'public' OR albums.owner_id = ?) ORDER BY images.created_at DESC LIMIT 24", [session?.user?.id ?? null]);
+    const images = await query("SELECT images.id, images.album_id, images.title, images.original_name, images.created_at, images.visibility, albums.name AS album_name FROM images JOIN albums ON albums.id = images.album_id WHERE albums.owner_id = ? ORDER BY images.created_at DESC LIMIT 24", [req.session.user.id]);
     res.json({ data: images });
   } catch (error) { databaseError(res, error); }
 });
