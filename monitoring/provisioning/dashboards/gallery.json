@@ -1,0 +1,21 @@
+{
+  "id": null,
+  "uid": "gallery-ops",
+  "title": "Gallery Monitoring",
+  "tags": ["gallery", "monitoring"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 4,
+  "refresh": "15s",
+  "panels": [
+    {"id":1,"type":"stat","title":"Gallery Up","gridPos":{"h":5,"w":6,"x":0,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"up{job=\"gallery-app\"}","refId":"A"}],"fieldConfig":{"defaults":{"unit":"short","thresholds":{"mode":"absolute","steps":[{"color":"red","value":0},{"color":"green","value":1}]}},"overrides":[]}},
+    {"id":2,"type":"timeseries","title":"Gallery Requests / second","gridPos":{"h":8,"w":12,"x":6,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"sum(rate(gallery_http_requests_total[5m]))","legendFormat":"requests/s","refId":"A"}]},
+    {"id":3,"type":"timeseries","title":"Gallery HTTP Errors / second","gridPos":{"h":8,"w":6,"x":18,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"sum(rate(gallery_http_errors_total[5m]))","legendFormat":"errors/s","refId":"A"}]},
+    {"id":4,"type":"timeseries","title":"Gallery Request Latency P95","gridPos":{"h":8,"w":12,"x":0,"y":8},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"histogram_quantile(0.95, sum(rate(gallery_http_request_duration_seconds_bucket[5m])) by (le))","legendFormat":"p95 seconds","refId":"A"}]},
+    {"id":5,"type":"timeseries","title":"Images Uploaded","gridPos":{"h":8,"w":6,"x":12,"y":8},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"increase(gallery_uploads_total[1h])","legendFormat":"images/hour","refId":"A"}]},
+    {"id":6,"type":"timeseries","title":"Upload Bytes","gridPos":{"h":8,"w":6,"x":18,"y":8},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"increase(gallery_upload_bytes_total[1h]) / 1024 / 1024","legendFormat":"MB/hour","refId":"A"}]},
+    {"id":7,"type":"timeseries","title":"Share Links Created","gridPos":{"h":8,"w":12,"x":0,"y":16},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"increase(gallery_share_links_created_total[1h])","legendFormat":"links/hour","refId":"A"}]},
+    {"id":8,"type":"timeseries","title":"System CPU","gridPos":{"h":8,"w":12,"x":12,"y":16},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"rate(container_cpu_usage_seconds_total{id=\"/\",cpu=\"total\"}[5m]) * 100","legendFormat":"CPU %","refId":"A"}],"fieldConfig":{"defaults":{"unit":"percent"},"overrides":[]}},
+    {"id":9,"type":"timeseries","title":"System RAM","gridPos":{"h":8,"w":12,"x":0,"y":24},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"container_memory_working_set_bytes{id=\"/\"} / 1024 / 1024 / 1024","legendFormat":"RAM GB","refId":"A"}],"fieldConfig":{"defaults":{"unit":"decgbytes"},"overrides":[]}}
+  ]
+}
