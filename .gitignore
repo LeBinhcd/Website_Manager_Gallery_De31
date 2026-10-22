@@ -1,0 +1,16 @@
+.env
+.env.*
+!.env.example
+node_modules/
+app/node_modules/
+app/uploads/*
+!app/uploads/.gitkeep
+backups/*
+!backups/.gitkeep
+docs/evidence/*
+*.log
+*.sql.gz
+nginx/certs/*
+!nginx/certs/.gitkeep
+.DS_Store
+Bao_cao_De13_Tran_Dang_Cong_Tam_DTC245220005.docx
